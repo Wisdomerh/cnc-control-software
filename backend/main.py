@@ -2,24 +2,41 @@ from flask import Flask, jsonify
 from flask_socketio import SocketIO
 import serial
 import time
+import serial.tools.list_ports
 
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-# Serial connection to GRBL
-ser = serial.Serial('COM3', 115200)  # Update COM port and baud rate as needed
+# Check available COM ports
+def get_available_port():
+    ports = [port.device for port in serial.tools.list_ports.comports()]
+    return ports[0] if ports else None  # Return the first available port, or None if no ports are found
+
+# Attempt to establish a serial connection
+serial_port = get_available_port()
+if serial_port:
+    ser = serial.Serial(serial_port, 115200, timeout=1)  # Set timeout to prevent freezing
+    print(f"Connected to {serial_port}")
+else:
+    ser = None
+    print("No serial devices found. Running without GRBL connection.")
 
 # GRBL initialization
 def initialize_grbl():
-    ser.write(b"\r\n\r\n")
-    time.sleep(2)
-    ser.flushInput()
+    if ser:
+        ser.write(b"\r\n\r\n")
+        time.sleep(2)
+        ser.flushInput()
+    else:
+        print("GRBL not initialized. No device connected.")
 
 # Send G-code to GRBL
 def send_gcode(command):
-    ser.write((command + '\n').encode())
-    response = ser.readline().decode().strip()
-    return response
+    if ser:
+        ser.write((command + '\n').encode())
+        response = ser.readline().decode().strip()
+        return response
+    return "No device connected"
 
 # API endpoint to send G-code
 @app.route('/send_gcode/<command>', methods=['GET'])
