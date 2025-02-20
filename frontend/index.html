@@ -4,31 +4,96 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CNC Control Software</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; overflow: hidden; }
+        #canvas-container { width: 100%; height: 70vh; position: relative; }
+        #controls { padding: 20px; background: #f4f4f4; }
+        #response { white-space: pre-wrap; background: #f4f4f4; padding: 10px; border: 1px solid #ccc; }
+    </style>
 </head>
 <body>
-    <h1>CNC Control Software</h1>
-    <input type="text" id="gcodeInput" placeholder="Enter G-code">
-    <button id="sendButton">Send G-code</button>
+    <div id="canvas-container"></div>
+    <div id="controls">
+        <button id="homeButton">Home Machine</button>
+        <input type="number" id="xJog" placeholder="X" step="1">
+        <input type="number" id="yJog" placeholder="Y" step="1">
+        <input type="number" id="zJog" placeholder="Z" step="1">
+        <input type="number" id="feedRate" placeholder="Feed Rate" value="1000">
+        <button id="jogButton">Jog</button>
+        <input type="text" id="gcodeInput" placeholder="Enter G-code">
+        <button id="sendButton">Send G-code</button>
+    </div>
     <pre id="response"></pre>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script>
-        const socket = io('http://localhost:5000');
-        const gcodeInput = document.getElementById('gcodeInput');
-        const sendButton = document.getElementById('sendButton');
-        const responseDiv = document.getElementById('response');
+    <script type="module">
+        import * as THREE from 'three';
 
+        // Set up Three.js scene
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / (window.innerHeight * 0.7), 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight * 0.7);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Add axes helper
+        const axesHelper = new THREE.AxesHelper(10);
+        scene.add(axesHelper);
+
+        // Add a grid helper
+        const gridHelper = new THREE.GridHelper(50, 50);
+        scene.add(gridHelper);
+
+        // Set camera position
+        camera.position.set(25, 25, 25);
+        camera.lookAt(0, 0, 0);
+
+        // Render loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Parse G-code and draw toolpath
+        function drawToolpath(gcode) {
+            const points = [];
+            const lines = gcode.split('\n');
+            let currentPosition = { x: 0, y: 0, z: 0 };
+
+            lines.forEach((line) => {
+                if (line.startsWith('G1') || line.startsWith('G0')) {
+                    const parts = line.split(' ');
+                    parts.forEach((part) => {
+                        if (part.startsWith('X')) currentPosition.x = parseFloat(part.slice(1));
+                        if (part.startsWith('Y')) currentPosition.y = parseFloat(part.slice(1));
+                        if (part.startsWith('Z')) currentPosition.z = parseFloat(part.slice(1));
+                    });
+                    points.push(new THREE.Vector3(currentPosition.x, currentPosition.y, currentPosition.z));
+                }
+            });
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+            const toolpath = new THREE.Line(geometry, material);
+            scene.add(toolpath);
+        }
+
+        // Example G-code
+        const exampleGcode = `
+G1 X10 Y10 Z0
+G1 X20 Y20 Z0
+G1 X30 Y10 Z0
+G1 X10 Y10 Z0
+`;
+        drawToolpath(exampleGcode);
+
+        // Handle G-code input
+        const sendButton = document.getElementById('sendButton');
+        const gcodeInput = document.getElementById('gcodeInput');
         sendButton.addEventListener('click', () => {
             const gcode = gcodeInput.value;
-            fetch(`http://localhost:5000/send_gcode/${gcode}`)
-                .then((res) => res.json())
-                .then((data) => {
-                    responseDiv.textContent = data.response;
-                });
-        });
-
-        socket.on('connect', () => {
-            console.log('Connected to backend');
+            drawToolpath(gcode);
         });
     </script>
 </body>
