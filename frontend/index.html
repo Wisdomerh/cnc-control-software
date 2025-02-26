@@ -70,26 +70,42 @@
             // Clear existing toolpath
             scene.children = scene.children.filter((obj) => obj.type !== 'Line');
 
-            const points = [];
+            const rapidPoints = [];
+            const cuttingPoints = [];
             const lines = gcode.split('\n');
             let currentPosition = { x: 0, y: 0, z: 0 };
 
             lines.forEach((line) => {
-                if (line.startsWith('G1') || line.startsWith('G0')) {
+                if (line.startsWith('G0')) {
                     const parts = line.split(' ');
                     parts.forEach((part) => {
                         if (part.startsWith('X')) currentPosition.x = parseFloat(part.slice(1));
                         if (part.startsWith('Y')) currentPosition.y = parseFloat(part.slice(1));
                         if (part.startsWith('Z')) currentPosition.z = parseFloat(part.slice(1));
                     });
-                    points.push(new THREE.Vector3(currentPosition.x, currentPosition.y, currentPosition.z));
+                    rapidPoints.push(new THREE.Vector3(currentPosition.x, currentPosition.y, currentPosition.z));
+                } else if (line.startsWith('G1')) {
+                    const parts = line.split(' ');
+                    parts.forEach((part) => {
+                        if (part.startsWith('X')) currentPosition.x = parseFloat(part.slice(1));
+                        if (part.startsWith('Y')) currentPosition.y = parseFloat(part.slice(1));
+                        if (part.startsWith('Z')) currentPosition.z = parseFloat(part.slice(1));
+                    });
+                    cuttingPoints.push(new THREE.Vector3(currentPosition.x, currentPosition.y, currentPosition.z));
                 }
             });
 
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-            const toolpath = new THREE.Line(geometry, material);
-            scene.add(toolpath);
+            // Draw rapid moves in red
+            const rapidGeometry = new THREE.BufferGeometry().setFromPoints(rapidPoints);
+            const rapidMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+            const rapidToolpath = new THREE.Line(rapidGeometry, rapidMaterial);
+            scene.add(rapidToolpath);
+
+            // Draw cutting moves in green
+            const cuttingGeometry = new THREE.BufferGeometry().setFromPoints(cuttingPoints);
+            const cuttingMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+            const cuttingToolpath = new THREE.Line(cuttingGeometry, cuttingMaterial);
+            scene.add(cuttingToolpath);
         }
 
         // Handle G-code file upload
