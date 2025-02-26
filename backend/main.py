@@ -2,60 +2,37 @@ from flask import Flask, jsonify, request
 from flask_socketio import SocketIO
 import serial
 import time
-import serial.tools.list_ports
-import threading  # Added for running GRBL response reading in a separate thread
+import threading
 
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-# Check available COM ports
-def get_available_port():
-    ports = [port.device for port in serial.tools.list_ports.comports()]
-    return ports[0] if ports else None  # Return the first available port, or None if no ports are found
-
-# Attempt to establish a serial connection
-serial_port = get_available_port()
-if serial_port:
-    try:
-        ser = serial.Serial(serial_port, 115200, timeout=1)  # Set timeout to prevent freezing
-        print(f"Connected to {serial_port}")
-    except serial.SerialException as e:
-        print(f"Serial connection failed: {e}")
-        ser = None
-else:
-    ser = None
-    print("No serial devices found. Running without GRBL connection.")
+# Serial connection to GRBL
+ser = serial.Serial('COM3', 115200)  # Update COM port and baud rate as needed
 
 # GRBL initialization
 def initialize_grbl():
-    if ser:
-        ser.write(b"\r\n\r\n")
-        time.sleep(2)
-        ser.flushInput()
-    else:
-        print("GRBL not initialized. No device connected.")
+    ser.write(b"\r\n\r\n")
+    time.sleep(2)
+    ser.flushInput()
 
 # Send G-code to GRBL
 def send_gcode(command):
-    if ser:
+    try:
         ser.write((command + '\n').encode())
         response = ser.readline().decode().strip()
+        if "error" in response.lower():
+            raise ValueError(f"GRBL error: {response}")
         return response
-    return "No device connected"
+    except Exception as e:
+        return str(e)
 
 # Read GRBL responses in real-time
 def read_grbl_responses():
     while True:
-        if ser:
-            try:
-                response = ser.readline().decode().strip()
-                if response:
-                    socketio.emit('grbl_response', response)
-            except serial.SerialException as e:
-                print(f"Serial error: {e}")
-                break
-        else:
-            time.sleep(1)  # Prevents excessive CPU usage when no device is connected
+        response = ser.readline().decode().strip()
+        if response:
+            socketio.emit('grbl_response', response)
 
 # API endpoint to send G-code
 @app.route('/send_gcode', methods=['POST'])
