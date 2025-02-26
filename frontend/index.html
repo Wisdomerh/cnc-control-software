@@ -20,6 +20,7 @@
         <input type="number" id="zJog" placeholder="Z" step="1">
         <input type="number" id="feedRate" placeholder="Feed Rate" value="1000">
         <button id="jogButton">Jog</button>
+        <input type="file" id="gcodeFile" accept=".gcode">
         <input type="text" id="gcodeInput" placeholder="Enter G-code">
         <button id="sendButton">Send G-code</button>
     </div>
@@ -28,6 +29,7 @@
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script type="module">
         import * as THREE from 'three';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
         // Set up Three.js scene
         const scene = new THREE.Scene();
@@ -35,6 +37,13 @@
         const renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight * 0.7);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Add orbit controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.25;
+        controls.screenSpacePanning = false;
+        controls.maxPolarAngle = Math.PI / 2;
 
         // Add axes helper
         const axesHelper = new THREE.AxesHelper(10);
@@ -51,12 +60,16 @@
         // Render loop
         function animate() {
             requestAnimationFrame(animate);
+            controls.update();
             renderer.render(scene, camera);
         }
         animate();
 
         // Parse G-code and draw toolpath
         function drawToolpath(gcode) {
+            // Clear existing toolpath
+            scene.children = scene.children.filter((obj) => obj.type !== 'Line');
+
             const points = [];
             const lines = gcode.split('\n');
             let currentPosition = { x: 0, y: 0, z: 0 };
@@ -79,14 +92,19 @@
             scene.add(toolpath);
         }
 
-        // Example G-code
-        const exampleGcode = `
-G1 X10 Y10 Z0
-G1 X20 Y20 Z0
-G1 X30 Y10 Z0
-G1 X10 Y10 Z0
-`;
-        drawToolpath(exampleGcode);
+        // Handle G-code file upload
+        const gcodeFileInput = document.getElementById('gcodeFile');
+        gcodeFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const gcode = e.target.result;
+                    drawToolpath(gcode);
+                };
+                reader.readAsText(file);
+            }
+        });
 
         // Handle G-code input
         const sendButton = document.getElementById('sendButton');
